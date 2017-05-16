@@ -7,7 +7,7 @@ This tool has been developed for R's Shiny platform, using flexdashboard to orga
 
 The main application is found in the sampledata_flexdash.Rmd file. The initial section reads in data and sets parameters for a textbox showing parcel data and a dropdown menu used on two different tabs. The remainder of the code creates the three main tabs used in this application:
 
-1. # of property issues: Allows users to view and filter properties based on the total number of issues reported.
+1. Number of property issues: Allows users to view and filter properties based on the total number of issues reported.
 2. Specific issues & heatmap: Allows users to view the locations of specific issues (such as roof damage). Users can also identify hotspots for issues based on a hexagonal grid.
 3. Classification & census: Properties are visualized based on a three tier classification (standard, substandard, and dilapidated). Block level data from the 2010 Census is also used to contextualize property conditions.
 
