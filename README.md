@@ -11,6 +11,8 @@ The main application is found in the sampledata_flexdash.Rmd file. The initial s
 2. Specific issues & heatmap: Allows users to view the locations of specific issues (such as roof damage). Users can also identify hotspots for issues based on a hexagonal grid.
 3. Classification & census: Properties are visualized based on a three tier classification (standard, substandard, and dilapidated). Block level data from the 2010 Census is also used to contextualize property conditions.
 
-The data for this application is in the Data folder, including data on the parcels themselves, census variables, and the hexagonal grid. 
+The data for this application is in the Data folder, including data on the parcels themselves, census variables, and the hexagonal grid. The data provided here are for *sample purposes* only--they were created synthetically and do not reflect actual conditions at locations shown on the map.
+
+In addition, the sampledata_hexagg script is used with two data files (hexgrid_sample and Parcels_sample) to count property issues by hex grid cell.
 
 Future development may include adding additional contextual data or other forms of visualizing the distribution of issues across properties.
