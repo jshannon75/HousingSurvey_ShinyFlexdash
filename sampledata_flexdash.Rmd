@@ -1,0 +1,446 @@
+---
+title: "Housing Conditions: Sample survey results"
+runtime: shiny
+output:
+  flexdashboard::flex_dashboard:
+    orientation: columns
+    theme: cerulean
+    vertical_layout: fill
+    navbar:
+    - { title: "DATA IS NOT ACCURATE--ONLY FOR DEMONSTRATION", align: right}
+---
+
+```{r setup, include=FALSE}
+#Load required packages
+library(flexdashboard)
+library(leaflet)
+library(htmltools)
+library(classInt)
+library(tidyverse)
+library(sf)
+
+#Read in data
+parcel_points <- read_csv("Data/Parcels_sample.csv")
+parcel_points$Classify<-factor(parcel_points$Classify,levels=c("Standard","Substandard", "Dilapidated"),ordered=TRUE)
+
+census<-st_read("Data","GA_Variables_sample_WGS84")
+
+hexgrid_blank<-st_read("Data", "hexgrid_sample_ID")
+hexgrid_cnt<-read_csv("Data/HexCount_sampledata.csv")
+hexgrid<-merge(hexgrid_blank,hexgrid_cnt,all.x=FALSE)
+
+#Set data URL
+data<-HTML("https://docs.google.com/spreadsheets/d/1uaWChRlbPdW9hQDR7AJU3me71TDwQ-GjJdkpDzNamSo/edit?usp=sharing")
+
+#Create textbox fields and then merge to a single variable
+parcel_points<-mutate(parcel_points,
+                      str1=paste("<strong>Parcel ID: </strong>",ID),
+                      str2B=paste("<br><strong>Property type: </strong>",proptype),
+                      str3=paste("<br><strong>General Condition: </strong>",Classify),
+                      str33=ifelse(Pic1!="No",paste("<br><br><strong>Photos</strong><br><a href='",
+                                                    Pic1,"' target='_blank'>Picture 1</a>"),""),
+                      str4=HTML("<br><br><strong>Identified structural problems</strong>"),
+                      str5=ifelse(MIN_RFSWY=="Yes",HTML("<br>Minor-roof sway"),""),
+                      str6=ifelse(MIN_RFTILE=="Yes",HTML("<br>Minor-damaged roof"),""),
+                      str7=ifelse(MIN_WINDDO=="Yes",HTML("<br>Minor-uneven windows/doors"),""),
+                      str71=ifelse(MIN_FOUND=="Yes",HTML("<br>Minor-foundation damage"),""),
+                      str8=ifelse(MIN_WNDPAN=="Yes",HTML("<br>Minor-broken windows"),""),
+                      str9=ifelse(MIN_UNFINW=="Yes",HTML("<br>Minor-bare wood"),""),
+                      str91=ifelse(MIN_MISSID=="Yes",HTML("<br>Minor-missing siding"),""),
+                      str10=ifelse(MIN_INSUL=="Yes",HTML("<br>Minor-exposed insulation"),""),
+                      str11=ifelse(MIN_ROT=="Yes",HTML("<br>Minor-dry rot"),""),
+                      str12=ifelse(MIN_RAILS=="Yes",HTML("<br>Minor-missing handrails"),""),
+                      str13=ifelse(MIN_PORCH=="Yes",HTML("<br>Minor-porch damage"),""),
+                      str13A=ifelse(MIN_PORJUNK=="Yes",HTML("<br>Minor-junk on porch"),""),
+                      str13B=ifelse(MIN_PAINT=="Yes",HTML("<br>Minor-chipping paint"),""),
+                      str13C=ifelse(MIN_GUTTER=="Yes",HTML("<br>Minor-gutter repair needed"),""),
+                      str13D=ifelse(MIN_CHIMN=="Yes",HTML("<br>Minor-chimney repair needed"),""),
+                      str14=ifelse(MAJ_RFSWY=="Yes",HTML("<br>Major-sagging/rusted roof"),""),
+                      str15=ifelse(MAJ_RFTILE=="Yes",HTML("<br>Major-missing tiles/shingles"),""),
+                      str16=ifelse(MAJ_FOUND=="Yes",HTML("<br>Major-foundation damage"),""),
+                      str17=ifelse(MAJ_WINDDO=="Yes",HTML("<br>Major-broken windows/doors"),""),
+                      str18=ifelse(MAJ_SIDING=="Yes",HTML("<br>Major-damaged/missing siding"),""),
+                      str19=ifelse(MAJ_ROT=="Yes",HTML("<br>Major-dry rot"),""),
+                      str20=ifelse(MAJ_PORCH=="Yes",HTML("<br>Major-steps/porch falling in"),""),
+                      str2A=ifelse(MAJ_CHIMN=="Yes",HTML("<br>Major-chimney sections missing"),""),
+                      str21=ifelse(MnMj_total==0,HTML("<br>No problems"),""),
+                      str22=paste("<br><br><strong>Total minor problems: </strong>",MIN_TOTAL),
+                      str23=paste("<br><strong>Total major problems: </strong>",MAJ_TOTAL),
+                      str24=paste("<br><strong>Total of all problems: </strong>",MnMj_total),
+                      str25=ifelse(other_tot!=0,paste("<br><br><strong>Other issues:</strong>"),""),
+                      str26=ifelse(YARD_MOW=="Yes",HTML("<br>Yard needs to  be mowed"),""),
+                      str27=ifelse(YARD_OVRGR=="Yes",HTML("<br>Yard overgrown (including dead trees)"),""),
+                      str28=ifelse(YARD_VHINOP=="Yes",HTML("<br>Inoperable vehicle in yard"),""),
+                      str29=ifelse(YARD_VHPARK=="Yes",HTML("<br>Vehicle parked in front of house"),""),
+                      str30=ifelse(YARD_GRCOV=="Yes",HTML("<br>Mulch/pine straw on unpaved areas"),""),
+                      str31=ifelse(YARD_MAJCL=="Yes",HTML("<br>Major yard cleanup needed"),"")
+                    )
+
+parcel_points<-unite(parcel_points,col="textbox",47:85,sep="",remove=TRUE)
+
+#Create dropdown menu
+dropdown<- list('Minor: roof sway' = 'MIN_RFSWY',
+         'Minor: damaged roof' = 'MIN_RFTILE',
+         'Minor: foundation damage' = 'MIN_FOUND',
+         'Minor: uneven windows/doors' = 'MIN_WINDDO',
+         'Minor: broken window panes' = 'MIN_WNDPAN',
+         'Minor: bare wood' = 'MIN_UNFINW',
+         'Minor: missing siding' = 'MIN_MISSID',
+         'Minor: exposed insulation' = 'MIN_INSUL',
+         'Minor: dry rot' = 'MIN_ROT',
+         'Minor: missing handrails' = 'MIN_RAILS',
+         'Minor: porch damage' = 'MIN_PORCH',
+         'Minor: junk on porch' = 'MIN_PORJUNK',
+         'Minor: chipping paint' = 'MIN_PAINT',
+         'Minor: gutter repair needed' = 'MIN_GUTTER',
+         'Minor: chimney repair needed' = 'MIN_CHIMN',
+         'Major: sagging/rusted roof' = 'MAJ_RFSWY',
+         'Major: missing tiles/shingles' = 'MAJ_RFTILE',
+         'Major: foundation damage' = 'MAJ_FOUND',
+         'Major: broken windows/doors' = 'MAJ_WINDDO',
+         'Major: damaged/missing siding' = 'MAJ_SIDING',
+         'Major: dry rot' = 'MAJ_ROT',
+         'Major: steps/porch falling in'='MAJ_PORCH',
+         'Major: chimney sections missing'='MAJ_CHIMN',
+         'Yard overgrown'='YARD_OVRGR',
+         'Inoperable vehicle in yard'='YARD_VHINOP',
+         'Vehicle parked in front of house'='YARD_VHPARK',
+         'Mulch/pine straw on unpaved areas'='YARD_GRCOV',
+         'Major yard cleanup needed'='YARD_MAJCL')
+```
+
+# of property issues
+===================================== 
+
+Column {.sidebar}
+-----------------------------------------------------------------------
+
+### Select Variables
+
+```{r}
+sliderInput("min_range1", "Minor problems", min(parcel_points$MIN_TOTAL), max(parcel_points$MIN_TOTAL),
+            value = range(parcel_points$MIN_TOTAL), step = 1
+   )
+
+sliderInput("maj_range1", "Major problems", min(parcel_points$MAJ_TOTAL), max(parcel_points$MAJ_TOTAL),
+            value = range(parcel_points$MAJ_TOTAL), step = 1
+   )
+     
+radioButtons("landlord","Only landlord properties?",
+           c("No"="**", "Yes"="0"))
+          
+selectInput("bmap1", "Base map", choices = c("Road map (CartoDB)"="CartoDB.Positron", 
+                                             "Satellite imagery (ESRI)"="Esri.WorldImagery"))
+     
+HTML("<a href='",data,"'>View the data</a>")
+     
+```
+
+Column {data-width=400}
+-----------------------------------------------------------------------
+
+```{r} 
+#Filter the data based on sliders  
+filteredData1 <- reactive({
+    subset(parcel_points,MIN_TOTAL>=input$min_range1[1] & parcel_points$MIN_TOTAL <= input$min_range1[2]&
+             parcel_points$MAJ_TOTAL >= input$maj_range1[1] & parcel_points$MAJ_TOTAL <= input$maj_range1[2] &
+             parcel_points$Landlord!=input$landlord)
+  })
+
+#Create color scheme
+pal1 <- colorBin(
+    palette = c("#D9D9D9","#FEF0D9","#FC8D59","#B30000"),
+    bins=c(0,.1,2,7,15),
+    domain = parcel_points$MnMj_total
+  )
+
+#Load base map
+output$map1 <- renderLeaflet(
+  leaflet(parcel_points) %>% fitBounds(~min(parcel_points$long), ~min(parcel_points$lat),
+                   ~max(parcel_points$long) , ~max(parcel_points$lat))
+  )
+
+#Add points as a reactive element
+observe({
+  leafletProxy('map1',data=filteredData1()) %>%
+        clearShapes()%>% clearControls() %>%
+    addProviderTiles(input$bmap1, options = providerTileOptions(noWrap = TRUE)) %>%
+    addCircles(radius=12,opacity=1,fillOpacity=0.9,color="#222222",fillColor= ~pal1(MnMj_total),
+                         weight=.5,layerId = filteredData1()$ID) %>%
+    addLegend(position = "bottomright",pal = pal1, values = ~MnMj_total,title="Total # of issues")
+})
+
+leafletOutput('map1',height="3000px")
+```
+
+Column {data-width=250}
+-----------------------------------------------------------------------
+
+###Click on a point on the map to see the property information below.
+```{r}
+
+##Get the parcel ID from the clicked shape as an object, and then display textbox
+observe({
+  validate(need(input$map1_shape_click, FALSE))
+  prop_id<-subset(parcel_points,ID==input$map1_shape_click$id)
+  output$text1 <- renderUI({
+    HTML(prop_id$textbox)
+  })
+})
+
+htmlOutput("text1")
+```
+
+
+
+
+Specific issues & heatmap
+===================================== 
+
+Column {.sidebar}
+-----------------------------------------------------------------------
+
+### Select Variables
+
+```{r}
+selectInput("issue2","Select housing issue:",dropdown)
+
+radioButtons("landlord2","Only landlord properties?",
+                 c("No"="**", "Yes"="0"))
+    
+radioButtons("showgrid","Show heatmap?",
+             c("Yes","No"))
+
+conditionalPanel(
+  condition = "input.showgrid=='Yes'",
+     sliderInput("hex_range", "Min. # of properties per grid cell", 1, 15,
+            value = 1, step = 1)
+  )
+
+selectInput("bmap2", "Base map", choices = c("Road map (CartoDB)"="CartoDB.Positron", 
+                                               "Satellite imagery (ESRI)"="Esri.WorldImagery"))
+  
+HTML("<a href='",data,"'>View the data</a>")
+```
+
+
+Column {data-width=400}
+-----------------------------------------------------------------------
+
+###Red dots are properties with the selected issue
+```{r} 
+#Subset parcel data based on inputs and set color scheme.
+#A new variabl--"var"--is created based on the selected variable
+filteredData2 <- reactive({
+    points_var<-subset(parcel_points,select=input$issue2)
+    names(points_var)<-"points_var"
+    points_var1<-cbind(parcel_points,points_var)
+    points_var1<-subset(points_var1,Landlord!=input$landlord2)
+    points_var1
+  })
+
+ pal2 <- colorFactor(
+    palette = c("#999999","#FF0000"),
+    parcel_points$MIN_RFTILE
+  )
+ 
+#Subset the hex grid and also create a "var" variable.
+filteredData_hexgrid<-reactive({
+  var<-subset(hexgrid,select=input$issue2)
+  names(var)<-"var"
+  hexgrid_var<-cbind(hexgrid,var)
+  hexgrid_var<-subset(hexgrid_var,count>=input$hex_range[1])
+  hexgrid_var
+})
+
+#Create the map. "ifelse" is used to show or hide the grid.
+output$map2 <- renderLeaflet({
+   if(input$showgrid=="No") 
+    {leaflet(filteredData2(),height=4000) %>%
+         addProviderTiles(input$bmap2,
+                    options = providerTileOptions(noWrap = TRUE)) %>%
+         fitBounds(~min(parcel_points$long), ~min(parcel_points$lat),
+                   ~max(parcel_points$long) , ~max(parcel_points$lat)) %>%
+         addCircles(radius=12,opacity=1,fillOpacity=0.9,color="#222222",fillColor=~pal2(filteredData2()$points_var),
+                   weight=.5,layerId = filteredData2()$ID) %>%
+         addLegend(position = "bottomright",pal = pal2, values = c("No","Yes"),title="Is problem present?")}
+   else
+  {nclassint2=5
+    pal_var<-colorBin(palette = "Reds", domain = filteredData_hexgrid()$var, bins=nclassint2, pretty = FALSE)
+  
+    popup_hexgrid<-paste("<b>Surveyed properties: </b>",filteredData_hexgrid()$count,"<br>",
+                       "<b>Pct. of properties with issue: </b>",filteredData_hexgrid()$var,"%",sep="")
+  
+    leaflet(filteredData2(),height=4000) %>%
+         addProviderTiles(input$bmap2,
+                     options = providerTileOptions(noWrap = TRUE)) %>%
+          fitBounds(~min(parcel_points$long), ~min(parcel_points$lat),
+                    ~max(parcel_points$long) , ~max(parcel_points$lat)) %>%
+          addPolygons(data=filteredData_hexgrid(),
+                 fillOpacity=.6,
+                 fillColor=pal_var(filteredData_hexgrid()$var),
+                 weight=1,
+                 color="#222222",
+                 popup=popup_hexgrid) %>%
+      addCircles(radius=12,opacity=1,fillOpacity=0.9,color="#222222",fillColor=~pal2(filteredData2()$points_var),
+                    weight=.5,layerId = filteredData2()$ID) %>%
+      addLegend(position = "bottomright",
+                    pal = pal_var,
+                    values = ~sort(filteredData_hexgrid()$var),
+                    title="Pct. of properties with issue")
+  }})
+
+ leafletOutput('map2',height="3000px")
+```
+
+Column {data-width=250}
+-----------------------------------------------------------------------
+
+###Click on a point on the map to see the property information below.
+```{r}
+
+##Get the parcel ID from the clicked shape as an object and display the textbox
+observe({
+    validate(need(input$map2_shape_click, FALSE))
+   prop_id<-subset(parcel_points,ID==input$map2_shape_click$id)
+    output$text2 <- renderUI({    
+      HTML(prop_id$textbox)
+    })
+})
+
+htmlOutput("text2")
+```
+
+
+Classification & Census
+===================================== 
+
+Column {.sidebar}
+-----------------------------------------------------------------------
+
+```{r}
+##Slider inputs
+checkboxGroupInput("houseGroup4",
+                   label=h3("Housing condition"),
+                   choices=list("Standard (green)"="Standard",
+                                "Substandard (yellow)"="Substandard",
+                                "Dilapidated (red)"="Dilapidated"),
+                   selected=c("Standard","Substandard","Dilapidated"))
+
+radioButtons("landlord3","Only landlord properties?",
+                 c("No"="**", "Yes"="0"))
+
+radioButtons("showcensus","Show census variables?",
+             c("Yes","No"))
+
+conditionalPanel(
+  condition = "input.showcensus=='Yes'",
+  radioButtons("censusdata",
+               "Pick the census variable:",
+               c("Pct. homeowners"="HOWNER",
+                 "Pct. non-white"="NONWHITE",
+                 "Pct. under 18"="UNDER18",
+                 "Pct. over 65"="OVER65",
+                 "Avg. household size"="HHSIZE")
+               ))
+  
+selectInput("bmap4", "Base map", choices = c("Road map (CartoDB)"="CartoDB.Positron", 
+                                             "Satellite imagery (ESRI)"="Esri.WorldImagery"))
+  
+HTML("<a href='",data,"'>View the data</a>")     
+```
+
+
+
+Column {data-width=400,data-height=650}
+-----------------------------------------------------------------------
+
+###Click on a census block or point for more information. Data from 2010 Decennial Census.
+```{r} 
+#Filter the parcel data based on user inputs 
+filteredData4 <- reactive({
+    var<-parcel_points[parcel_points$Classify %in% input$houseGroup4,]
+    var<-subset(var,Landlord!=input$landlord3)
+    var
+  })
+
+#Filter census data and create a new "var" field for the selected variable.
+filteredData_census<-reactive({
+   var<-subset(census,select=input$censusdata)
+   names(var)<-"var"
+   census_var<-cbind(census,var)
+   census_var
+})
+
+#Define color scheme for parcel condition
+  pal4 <- colorFactor(
+    palette = c("#1a9850","#FFFFBF","#d73027","#999999"),
+    levels=c("Standard","Substandard", "Dilapidated","NA"), 
+    ordered=FALSE
+  )
+  
+#Census block popup  
+popup_census<-paste(
+             "<b>Total population: </b>",census$TOTPOP,"<br>",
+             "<b>% homeowners:</b> ",round(census$HOWNER,1),"%<br>",
+             "<b>% non-white: </b>",round(census$NONWHITE,1),"%<br>",
+             "<b>% under 18: </b>",round(census$UNDER18,1),"%<br>",
+             "<b>% over 65: </b>",round(census$OVER65,1),"%<br>",
+             "<b>Avg. hh size: </b>",round(census$HHSIZE,2),
+             sep="")
+
+
+
+output$map4 <- renderLeaflet({
+  #Set classification breaks and color scheme for census data
+  nclassint=4
+
+  colorscheme<-if(input$censusdata=="HOWNER"){"YlGn"} else
+    if (input$censusdata=="NONWHITE") {"Blues"} else
+    if (input$censusdata=="UNDER18") {"Oranges"} else
+    if (input$censusdata=="OVER65") {"Reds"} else {"RdPu"}
+
+  breaks<-classIntervals(filteredData_census()$var,nclassint,style="jenks")
+
+  pal_var<-colorBin(palette = colorscheme, domain = breaks$brks, bins =breaks$brks, pretty = FALSE)
+
+  #Create popup for the parcel points 
+  popup_points<-paste("<b>Parcel_ID: </b>",filteredData4()$ID,"<br>",
+                    "<b>Condition:</b> ",filteredData4()$Classify,
+                    sep="")
+  
+  #Create map. Use "ifelse" to show census variables if selected
+  if(input$showcensus=="Yes"){
+    leaflet(filteredData4()) %>%
+        addProviderTiles(input$bmap4,
+              options = providerTileOptions(noWrap = TRUE)) %>%
+        fitBounds(~min(parcel_points$long), ~min(parcel_points$lat),
+              ~max(parcel_points$long) , ~max(parcel_points$lat))%>%
+        addPolygons(data=filteredData_census(),
+              fillOpacity=.6,
+              fillColor=pal_var(filteredData_census()$var),
+              weight=1,
+              color="#222222",
+              popup=popup_census) %>%
+       addCircles(radius=12,opacity=1,
+              fillOpacity=0.9,color="#222222",fillColor= ~pal4(Classify),
+              weight=.5,layerId = filteredData4()$ID,
+              popup=popup_points) %>%
+       addLegend(position = "bottomright",
+              pal = pal_var,
+              values = ~sort(filteredData_census()$var),
+              title="Legend (in % or amount)")} 
+     else {
+    leaflet(filteredData4()) %>%
+      addProviderTiles(input$bmap4,
+              options = providerTileOptions(noWrap = TRUE)) %>%
+      fitBounds(~min(parcel_points$long), ~min(parcel_points$lat),
+             ~max(parcel_points$long) , ~max(parcel_points$lat))%>%
+      addCircles(radius=12,opacity=1,
+             fillOpacity=0.9,color="#222222",fillColor= ~pal4(Classify),
+             weight=.5,layerId = filteredData4()$ID,
+             popup=popup_points)}
+      })
+
+leafletOutput('map4',height="3000px")
+```
